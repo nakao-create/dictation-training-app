@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>速読英単語 ディクテーション トレーニング</title>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body, #root { margin: 0; padding: 0; min-height: 100vh; }
+  * { box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+
+// ---------- サンプルデータ ----------
+const SAMPLE_QUESTIONS_RAW = [
+  {
+    title: "英文21・22",
+    answer: "Can we create a waste-free society?  It would seem like an ideal goal to realize, since mass production has forced a shift in our way of living.  Clothes have become\u2018fast fashion,\u2019worn once and then thrown away like a finished bag of potato chips.  Sure, most people will recycle their cans and bottles, but that doesn\u2019t alter the fact that we are still throwing away pounds and pounds of waste every day.  That will never change in a world where convenience is appreciated over all else.  Or will it?\nKamikatsu, a small town in Tokushima Prefecture, had been working for years to reduce waste.  However, when they learned about zero-waste philosophy, an idea popped into the residents\u2019 minds: to become the first zero-waste town in Japan.  The town doesn\u2019t collect domestic waste; instead the residents bring their waste to the waste collection site.  There, they sort it into 45 very specific and detailed categories.  Although some common stuff cannot be recycled, Kamikatsu has been able to recycle more than 80% of its waste.  Kamikatsu is also encouraging residents to reuse goods.  An area of its waste collection site offers used stuff for free. \nRecycling and reusing, however, are not enough to keep our world from becoming swallowed up in waste.  Kamikatsu also makes an effort to get people to brush up their understanding of the environment and make society as a whole think\u2018why?\u2019 Why are you buying or selling the product?  Is it good for the environment?  Will it become a favorite possession or will it be thrown away after one use?  Whereas before some believed they had a sacred right to buy or produce whatever they desired, now they realize that their actions affect the world around them.\nIn recent years, Kamikatsu built a complex facility called the Zero Waste Center.  A hotel located in the grounds of this facility is run on the understanding that creating a waste-free society applies not only to individuals, but also to businesses.  For example, instead of offering an individual soap bar to each guest, it encourages them to cut off the amount of soap they need at the front desk.  Fitting into a new strategy is not easy, but through its actions, Kamikatsu is leading the nation in finding ways to gain the prize of a truly waste-free society.  ",
+    blanked: "Can we create a waste-free society?  It would seem like an ideal ___ to realize, since mass production has forced a shift in our way of living.  Clothes have become\u2018fast fashion,\u2019worn once and then thrown away like a finished bag of potato chips.  Sure, most people will recycle their cans and bottles, but that doesn\u2019t ___ the fact that we are still throwing away pounds and pounds of waste every day.  That will never change in a world where convenience is appreciated over all else.  Or will it?\nKamikatsu, a small town in Tokushima Prefecture, had ___ for years to reduce waste.  However, when they learned about zero-waste philosophy, an idea popped into the residents\u2019 minds: to become the first zero-waste town in Japan.  The town doesn\u2019t collect domestic waste; instead the residents bring their waste to the waste collection site.  There, they sort it into ___ very specific and detailed categories.  Although some common stuff cannot be recycled, Kamikatsu has been able to recycle more than ___ of its waste.  Kamikatsu is also encouraging residents to reuse goods.  An area of its waste collection site offers used stuff for free. \nRecycling and reusing, however, are not enough to keep our world from ___ swallowed up in waste.  Kamikatsu also makes an effort to get people to brush up their understanding of the environment and make society as a whole think\u2018why?\u2019 Why are you buying or selling the product?  Is it good for the environment?  Will it be thrown ___ after one use?  Whereas before some believed they had a sacred right to buy or produce whatever they desired, now they realize that their actions affect the world around them.\nIn recent years, Kamikatsu built a complex facility called the Zero Waste Center.  A hotel ___ in the grounds of this facility is run on the understanding that creating a waste-free society applies not only to individuals, but also to businesses.  For example, instead of offering an individual soap bar to each guest, it encourages them to cut off the amount of soap they need at the front desk.  ___ into a new strategy is not easy, but through its actions, Kamikatsu is leading the nation in finding ways to gain the ___ of a truly waste-free society.  ",
+    meaning: "",
+    choices: "goal*,go,gone;alter*,other,utter;been working*,being working,been walking;45*,54,145;80%*,18%,180%;becoming*,become,been come;away*,way,awite;located*,locate,local;fitting*,fit,fat;prize*,praise,price",
+  },
+];
+
+// ---------- パース処理 ----------
+const BLANK_RE = /^([^_]*)_+([^_]*)$/;
+
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function parseMeaning(meaningStr) {
+  const map = {};
+  if (!meaningStr) return map;
+  String(meaningStr)
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .forEach((pair) => {
+      const idx = pair.indexOf("=");
+      if (idx === -1) return;
+      const word = pair.slice(0, idx).trim();
+      const mean = pair.slice(idx + 1).trim();
+      if (word) map[word.toLowerCase()] = mean;
+    });
+  return map;
+}
+
+function parseChoiceGroups(choicesStr) {
+  if (!choicesStr) return null;
+  const groups = String(choicesStr)
+    .split(";")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (groups.length === 0) return null;
+  return groups.map((g) => {
+    const opts = g
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    let correct = "";
+    const cleaned = opts.map((o) => {
+      if (o.endsWith("*")) {
+        correct = o.slice(0, -1).trim();
+        return correct;
+      }
+      return o;
+    });
+    return { correct, options: cleaned };
+  });
+}
+
+function buildWithChoices(blankedParas, choiceGroups, meaningMap) {
+  const blanks = [];
+  let cursor = 0;
+  const paragraphs = blankedParas.map((bp) => {
+    const tokens = bp.split(/\s+/).filter(Boolean);
+    const template = [];
+    tokens.forEach((tok) => {
+      const m = tok.match(BLANK_RE);
+      if (m) {
+        const grp = choiceGroups[cursor] || { correct: "", options: [] };
+        cursor += 1;
+        const correct = grp.correct || "";
+        const options = shuffle(grp.options.length ? grp.options : [correct]);
+        const meaning = meaningMap[correct.toLowerCase()] || "";
+        template.push({ type: "blank", prefix: m[1], suffix: m[2], correct, options, meaning });
+        blanks.push(correct);
+      } else {
+        template.push({ type: "text", value: tok });
+      }
+    });
+    return template;
+  });
+  return { paragraphs, blanks };
+}
+
+function buildWithAnswerDiff(answerParas, blankedParas, meaningMap) {
+  const blanks = [];
+  const paragraphs = answerParas.map((ap, pi) => {
+    const answerTokens = ap.split(/\s+/).filter(Boolean);
+    const blankTokens = (blankedParas[pi] || "").split(/\s+/).filter(Boolean);
+    const template = [];
+    blankTokens.forEach((tok, i) => {
+      const m = tok.match(BLANK_RE);
+      if (m) {
+        const prefix = m[1];
+        const suffix = m[2];
+        let answerTok = answerTokens[i] || "";
+        let correct = answerTok;
+        if (suffix && correct.endsWith(suffix)) correct = correct.slice(0, correct.length - suffix.length);
+        if (prefix && correct.startsWith(prefix)) correct = correct.slice(prefix.length);
+        const meaning = meaningMap[correct.toLowerCase()] || "";
+        template.push({ type: "blank", prefix, suffix, correct, options: [correct], meaning });
+        blanks.push(correct);
+      } else {
+        template.push({ type: "text", value: tok });
+      }
+    });
+    return template;
+  });
+  return { paragraphs, blanks };
+}
+
+function buildQuestion(row) {
+  const title = row.title || "";
+  const answer = row.answer || "";
+  const blanked = row.blanked || "";
+  const meaningMap = parseMeaning(row.meaning);
+  const choiceGroups = parseChoiceGroups(row.choices);
+
+  const blankedParas = String(blanked).split(/\n+/).map((s) => s.trim()).filter(Boolean);
+
+  let built;
+  if (choiceGroups) {
+    built = buildWithChoices(blankedParas, choiceGroups, meaningMap);
+  } else {
+    const answerParas = String(answer).split(/\n+/).map((s) => s.trim()).filter(Boolean);
+    built = buildWithAnswerDiff(answerParas, blankedParas, meaningMap);
+  }
+
+  return { title, answer, paragraphs: built.paragraphs, blanks: built.blanks, hasChoices: !!choiceGroups };
+}
+
+function DictationApp() {
+  const [questions, setQuestions] = useState(() =>
+    SAMPLE_QUESTIONS_RAW.map(buildQuestion)
+  );
+  const [qIndex, setQIndex] = useState(0);
+
+  const question = questions[qIndex];
+
+  const [filled, setFilled] = useState(() => new Array(question.blanks.length).fill(null));
+  const [checked, setChecked] = useState(false);
+  const [activeBlank, setActiveBlank] = useState(null);
+  const [view, setView] = useState("toc");
+
+  function resetForQuestion(idx, qs = questions) {
+    const q = qs[idx];
+    setFilled(new Array(q.blanks.length).fill(null));
+    setChecked(false);
+    setActiveBlank(null);
+  }
+
+  function goToQuestion(idx) {
+    setQIndex(idx);
+    resetForQuestion(idx);
+    setView("question");
+  }
+
+  function goToToc() {
+    setView("toc");
+  }
+
+  function openBlankPicker(blankIdx) {
+    if (checked) return;
+    setActiveBlank(blankIdx);
+  }
+
+  function closePicker() {
+    setActiveBlank(null);
+  }
+
+  function insertWord(word) {
+    if (checked) return;
+    if (activeBlank === null || activeBlank === undefined) return;
+    const newFilled = [...filled];
+    newFilled[activeBlank] = word;
+    setFilled(newFilled);
+    setActiveBlank(null);
+  }
+
+  function removeFromBlank(blankIdx) {
+    if (checked) return;
+    if (filled[blankIdx] === null) {
+      openBlankPicker(blankIdx);
+      return;
+    }
+    const newFilled = [...filled];
+    newFilled[blankIdx] = null;
+    setFilled(newFilled);
+  }
+
+  const allFilled = filled.every((v) => v !== null);
+
+  function checkAnswers() {
+    if (!allFilled) return;
+    setChecked(true);
+  }
+
+  function nextQuestion() {
+    const next = qIndex + 1;
+    if (next >= questions.length) {
+      setView("toc");
+      return;
+    }
+    setQIndex(next);
+    resetForQuestion(next);
+  }
+
+  const flatBlanks = useMemo(() => {
+    const list = [];
+    question.paragraphs.forEach((p) =>
+      p.forEach((t) => {
+        if (t.type === "blank") list.push(t);
+      })
+    );
+    return list;
+  }, [question]);
+
+  const results = useMemo(() => {
+    if (!checked) return null;
+    return flatBlanks.map((t, idx) => filled[idx] === t.correct);
+  }, [checked, filled, flatBlanks]);
+
+  const activeOptions = activeBlank !== null ? flatBlanks[activeBlank]?.options || [] : [];
+
+  let blankCounter = -1;
+
+  return (
+    <div style={styles.page}>
+      <div style={styles.headerBar}>
+        <div style={styles.waveform}>
+          {[6, 12, 20, 14, 24, 10, 18, 8, 22, 12, 6].map((h, i) => (
+            <span key={i} style={{ ...styles.wbar, height: h }} />
+          ))}
+        </div>
+        <div>
+          <div style={styles.kicker}>DICTATION DRILL</div>
+          <h1 style={styles.title}>速読英単語（必修編）ディクテーション トレーニング</h1>
+        </div>
+      </div>
+
+      <div style={styles.uploadRow}>
+        {view === "toc" ? (
+          <div style={styles.progress}>全{questions.length}問</div>
+        ) : (
+          <>
+            <button style={styles.backBtn} onClick={goToToc}>
+              ← 目次に戻る
+            </button>
+            <div style={styles.progress}>
+              問題 {qIndex + 1} / {questions.length}
+            </div>
+          </>
+        )}
+      </div>
+
+      {view === "toc" && (
+        <div style={styles.tocWrap}>
+          {questions.map((q, i) => (
+            <button key={i} style={styles.tocItem} onClick={() => goToQuestion(i)}>
+              <span style={styles.tocIndex}>{String(i + 1).padStart(2, "0")}</span>
+              <span style={styles.tocTitleText}>{q.title || `無題の問題 ${i + 1}`}</span>
+              <span style={styles.tocArrow}>›</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === "question" && (
+      <>
+      <div style={styles.card}>
+        {question.title && <div style={styles.qTitle}>{question.title}</div>}
+
+        {question.paragraphs.map((para, pi) => {
+          return (
+            <p style={styles.sentence} key={pi}>
+              {para.map((t, i) => {
+                if (t.type === "text") {
+                  return <span key={i}>{t.value} </span>;
+                }
+                blankCounter += 1;
+                const bIdx = blankCounter;
+                const word = filled[bIdx];
+                let state = "empty";
+                if (checked && word) {
+                  state = results[bIdx] ? "correct" : "incorrect";
+                } else if (word) {
+                  state = "filled";
+                }
+                const isActive = activeBlank === bIdx;
+                return (
+                  <span key={i}>
+                    {t.prefix}
+                    <sup style={styles.blankNum}>{bIdx + 1}</sup>
+                    <span
+                      onClick={() => removeFromBlank(bIdx)}
+                      style={{
+                        ...styles.blank,
+                        ...(state === "empty" ? styles.blankEmpty : {}),
+                        ...(state === "filled" ? styles.blankFilled : {}),
+                        ...(state === "correct" ? styles.blankCorrect : {}),
+                        ...(state === "incorrect" ? styles.blankIncorrect : {}),
+                        ...(isActive ? styles.blankActive : {}),
+                      }}
+                    >
+                      {word || "\u00A0\u00A0\u00A0\u00A0\u00A0"}
+                    </span>
+                    {t.suffix}{" "}
+                  </span>
+                );
+              })}
+            </p>
+          );
+        })}
+
+        {checked && (
+          <div style={styles.answerReveal}>
+            <div style={styles.answerLabel}>模範解答</div>
+            {(() => {
+              let n = -1;
+              return question.paragraphs.map((para, pi) => (
+                <p style={styles.answerPara} key={pi}>
+                  {para.map((t, i) => {
+                    if (t.type === "text") {
+                      return <span key={i}>{t.value} </span>;
+                    }
+                    n += 1;
+                    return (
+                      <span key={i} style={styles.answerHighlightWrap}>
+                        <sup style={styles.blankNum}>{n + 1}</sup>
+                        <span style={styles.answerHighlight}>
+                          {t.prefix}
+                          {t.correct}
+                          {t.suffix}
+                        </span>
+                        {t.meaning ? (
+                          <span style={styles.answerMeaning}>「{t.meaning}」</span>
+                        ) : (
+                          <span style={styles.answerMeaningMissing}>（意味未入力）</span>
+                        )}{" "}
+                      </span>
+                    );
+                  })}
+                </p>
+              ));
+            })()}
+          </div>
+        )}
+      </div>
+
+      <div style={styles.hintWrap}>
+        <div style={styles.hintText}>
+          {allFilled
+            ? "すべての空欄が埋まりました"
+            : `番号の付いた空欄をタップして選択してください（${filled.filter((v) => v !== null).length} / ${flatBlanks.length}）`}
+        </div>
+      </div>
+
+      {activeBlank !== null && (
+        <div style={styles.sheetOverlay} onClick={closePicker}>
+          <div style={styles.sheet} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.sheetHeader}>
+              <span>空欄 {activeBlank + 1} の選択肢</span>
+              <button style={styles.sheetClose} onClick={closePicker}>
+                閉じる
+              </button>
+            </div>
+            <div style={styles.sheetList}>
+              {activeOptions.length === 0 ? (
+                <div style={styles.bankEmptyMsg}>選択肢がありません</div>
+              ) : (
+                activeOptions.map((opt, oi) => (
+                  <button key={oi} style={styles.sheetItem} onClick={() => insertWord(opt)}>
+                    {opt}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={styles.actionRow}>
+        <button
+          style={{ ...styles.actionBtn, ...styles.resetBtn }}
+          onClick={() => resetForQuestion(qIndex)}
+        >
+          リセット
+        </button>
+        {!checked ? (
+          <button
+            style={{
+              ...styles.actionBtn,
+              ...styles.checkBtn,
+              opacity: allFilled ? 1 : 0.4,
+            }}
+            disabled={!allFilled}
+            onClick={checkAnswers}
+          >
+            答え合わせ
+          </button>
+        ) : (
+          <button
+            style={{ ...styles.actionBtn, ...styles.nextBtn }}
+            onClick={nextQuestion}
+          >
+            {qIndex + 1 < questions.length ? "次の問題" : "目次に戻る"}
+          </button>
+        )}
+      </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+// ---------- スタイル ----------
+const AMBER = "#E8A33D";
+const INK = "#14315C";
+const PAPER = "#EAF2FC";
+const LINE = "#C7D9F0";
+const GOOD = "#3E7C5A";
+const BAD = "#C4573B";
+const DEEP_BLUE = "#1F4FA0";
+const CHROME = "#DCEBFB";
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    background: DEEP_BLUE,
+    color: CHROME,
+    fontFamily: "'Iowan Old Style', 'Palatino Linotype', 'Georgia', serif",
+    padding: "20px 16px 40px",
+    maxWidth: 600,
+    margin: "0 auto",
+    boxSizing: "border-box",
+  },
+  headerBar: {
+    display: "flex",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 20,
+  },
+  waveform: {
+    display: "flex",
+    alignItems: "center",
+    gap: 3,
+    height: 28,
+    flexShrink: 0,
+  },
+  wbar: {
+    width: 3,
+    background: AMBER,
+    borderRadius: 2,
+  },
+  kicker: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 11,
+    letterSpacing: 3,
+    color: "#9FC1EE",
+  },
+  title: {
+    fontSize: 22,
+    margin: "2px 0 0",
+    fontWeight: 700,
+  },
+  uploadRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  backBtn: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 13,
+    background: "transparent",
+    border: "none",
+    color: CHROME,
+    padding: "8px 0",
+    cursor: "pointer",
+    fontWeight: 700,
+  },
+  progress: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 12,
+    color: "#9FC1EE",
+  },
+  tocWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    marginTop: 14,
+  },
+  tocItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    textAlign: "left",
+    background: "#FFFFFF",
+    border: `1px solid ${LINE}`,
+    borderRadius: 10,
+    padding: "16px 16px",
+    cursor: "pointer",
+    fontFamily: "'Iowan Old Style', Georgia, serif",
+  },
+  tocIndex: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 13,
+    color: AMBER,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  tocTitleText: {
+    fontSize: 16,
+    color: INK,
+    flex: 1,
+    lineHeight: 1.5,
+  },
+  tocArrow: {
+    fontSize: 20,
+    color: "#5B7699",
+    flexShrink: 0,
+  },
+  card: {
+    background: "#FFFFFF",
+    border: `1px solid ${LINE}`,
+    borderRadius: 10,
+    padding: "20px 18px",
+    marginTop: 12,
+    marginBottom: 18,
+    color: INK,
+  },
+  qTitle: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 13,
+    letterSpacing: 1,
+    color: "#5B7699",
+    marginBottom: 12,
+    paddingBottom: 8,
+    borderBottom: `1px dashed ${LINE}`,
+  },
+  sentence: {
+    fontSize: 17,
+    lineHeight: 2.3,
+    margin: "0 0 14px",
+  },
+  blankNum: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 10,
+    color: AMBER,
+    fontWeight: 700,
+    marginRight: 1,
+  },
+  blank: {
+    display: "inline-block",
+    minWidth: 60,
+    textAlign: "center",
+    borderBottom: `2px solid ${INK}`,
+    padding: "2px 4px",
+    margin: "0 1px",
+    cursor: "pointer",
+    fontWeight: 600,
+    color: INK,
+  },
+  blankEmpty: {
+    borderBottomStyle: "dashed",
+  },
+  blankFilled: {
+    background: "#FBEFD8",
+    borderRadius: 4,
+    borderBottomColor: AMBER,
+  },
+  blankCorrect: {
+    background: "#E4F1E8",
+    borderRadius: 4,
+    borderBottomColor: GOOD,
+    color: GOOD,
+  },
+  blankIncorrect: {
+    background: "#F8E6E0",
+    borderRadius: 4,
+    borderBottomColor: BAD,
+    color: BAD,
+  },
+  blankActive: {
+    background: "#FFF4DE",
+    boxShadow: `0 0 0 2px ${AMBER}`,
+    borderRadius: 4,
+  },
+  answerReveal: {
+    marginTop: 10,
+    paddingTop: 14,
+    borderTop: `1px dashed ${LINE}`,
+  },
+  answerLabel: {
+    fontFamily: "'Courier New', monospace",
+    fontWeight: 700,
+    color: INK,
+    fontSize: 12,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  answerPara: {
+    fontSize: 14,
+    lineHeight: 2.2,
+    color: "#3B5578",
+    margin: "0 0 10px",
+  },
+  answerHighlightWrap: {
+    display: "inline-block",
+    marginRight: 2,
+  },
+  answerHighlight: {
+    background: AMBER,
+    color: INK,
+    fontWeight: 700,
+    borderRadius: 3,
+    padding: "1px 4px",
+  },
+  answerMeaning: {
+    fontSize: 12,
+    color: "#8B6B2A",
+    marginLeft: 2,
+  },
+  answerMeaningMissing: {
+    fontSize: 11,
+    color: "#9FB0C7",
+    fontStyle: "italic",
+    marginLeft: 2,
+  },
+  hintWrap: {
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  hintText: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 12,
+    letterSpacing: 0.5,
+    color: "#9FC1EE",
+  },
+  bankEmptyMsg: {
+    fontSize: 13,
+    color: "#5B7699",
+    fontStyle: "italic",
+    padding: "10px 0",
+  },
+  sheetOverlay: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(28,36,48,0.45)",
+    display: "flex",
+    alignItems: "flex-end",
+    justifyContent: "center",
+    zIndex: 50,
+  },
+  sheet: {
+    width: "100%",
+    maxWidth: 600,
+    background: PAPER,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    padding: "16px 18px 24px",
+    maxHeight: "70vh",
+    overflowY: "auto",
+    boxSizing: "border-box",
+  },
+  sheetHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontFamily: "'Courier New', monospace",
+    fontSize: 13,
+    letterSpacing: 1,
+    color: INK,
+    fontWeight: 700,
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottom: `1px dashed ${LINE}`,
+  },
+  sheetClose: {
+    fontFamily: "'Courier New', monospace",
+    fontSize: 12,
+    background: "transparent",
+    border: `1px solid ${LINE}`,
+    color: "#5B7699",
+    padding: "4px 10px",
+    borderRadius: 4,
+    cursor: "pointer",
+  },
+  sheetList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  sheetItem: {
+    fontFamily: "'Iowan Old Style', Georgia, serif",
+    fontSize: 17,
+    textAlign: "left",
+    background: "#FFFFFF",
+    color: INK,
+    border: `1px solid ${LINE}`,
+    borderRadius: 8,
+    padding: "14px 16px",
+    cursor: "pointer",
+  },
+  actionRow: {
+    display: "flex",
+    gap: 12,
+  },
+  actionBtn: {
+    flex: 1,
+    padding: "14px 0",
+    fontSize: 15,
+    fontWeight: 700,
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+    fontFamily: "'Courier New', monospace",
+    letterSpacing: 1,
+  },
+  resetBtn: {
+    background: "transparent",
+    border: `1px solid ${INK}`,
+    color: INK,
+  },
+  checkBtn: {
+    background: AMBER,
+    color: INK,
+  },
+  nextBtn: {
+    background: INK,
+    color: PAPER,
+  },
+};
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<DictationApp />);
+</script>
+</body>
+</html>
