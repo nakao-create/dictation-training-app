@@ -10,10 +10,19 @@
 <style>
   html, body, #root { margin: 0; padding: 0; min-height: 100vh; }
   * { box-sizing: border-box; }
+  #error-box { display:none; background:#fee; color:#900; padding:16px; font-family:monospace; white-space:pre-wrap; }
 </style>
 </head>
 <body>
+<div id="error-box"></div>
 <div id="root"></div>
+<script>
+  window.onerror = function(msg, src, line, col, err) {
+    var box = document.getElementById('error-box');
+    box.style.display = 'block';
+    box.textContent = 'エラーが発生しました:\n' + msg + '\n(' + src + ':' + line + ':' + col + ')' + (err && err.stack ? '\n\n' + err.stack : '');
+  };
+</script>
 <script type="text/babel" data-presets="react">
 const { useState, useMemo } = React;
 
