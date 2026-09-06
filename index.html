@@ -23,7 +23,7 @@
     box.textContent = 'エラーが発生しました:\n' + msg + '\n(' + src + ':' + line + ':' + col + ')' + (err && err.stack ? '\n\n' + err.stack : '');
   };
 </script>
-<script type="text/babel" data-presets="react">
+<script type="text/plain" id="app-source">
 const { useState, useMemo } = React;
 
 // ---------- サンプルデータ ----------
@@ -769,7 +769,18 @@ const styles = {
 };
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<DictationApp />);
+root.render(React.createElement(DictationApp));
+</script>
+<script>
+  (function () {
+    var src = document.getElementById("app-source").textContent;
+    var output = Babel.transform(src, {
+      presets: [["react", { runtime: "classic" }]],
+    }).code;
+    var s = document.createElement("script");
+    s.textContent = output;
+    document.body.appendChild(s);
+  })();
 </script>
 </body>
 </html>
