@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <style>
   html, body, #root { margin: 0; padding: 0; min-height: 100vh; }
+  body { background: #1F4FA0; }
   * { box-sizing: border-box; }
   #error-box { display:none; background:#fee; color:#900; padding:16px; font-family:monospace; white-space:pre-wrap; }
 </style>
@@ -793,6 +794,7 @@ const styles = {
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(React.createElement(DictationApp));
+
 </script>
 <script>
   (function () {
